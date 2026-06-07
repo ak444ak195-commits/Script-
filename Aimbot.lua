@@ -16,6 +16,7 @@ local STATE_FILE = FILE_PREFIX .. "SystemState.json"
 local lastP = nil
 local lastCamCF = nil
 local CamConnection = nil
+local NoclipConnection = nil -- สำหรับระบบทะลุกำแพง
 local CurrentTargetCameraCFrame = nil
 local run_check = 0
 local lastClickTime = 0 
@@ -36,9 +37,9 @@ local RECORD_KEYS = {
     "One","Two","Three","Four","Five"
 }
 
--- [[ สร้างหน้าจอหลักแบบ V15 ]]
+-- [[ สร้างหน้าจอหลักแบบ V16 ]]
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "DreamTeamMacro_V15_Perfect_Edition"
+ScreenGui.Name = "DreamTeamMacro_V16_Perfect_Edition"
 ScreenGui.ResetOnSpawn = false
 
 local successGui, errGui = pcall(function()
@@ -68,7 +69,6 @@ local function MakeDraggable(frame)
     end)
 end
 
--- ตารางสำหรับเก็บฟังก์ชันย่อหน้าต่างเพื่อให้เรียกสั่งงานอัตโนมัติได้
 local AutoMinimizeRegistry = {}
 
 local function AddMinimizeFeature(frame, expandedHeight)
@@ -114,7 +114,6 @@ local function AddMinimizeFeature(frame, expandedHeight)
         ToggleMinimize()
     end)
     
-    -- บันทึกฟังก์ชันไว้สั่งย่อตอนเปิดรันสคริปต์
     table.insert(AutoMinimizeRegistry, function()
         ToggleMinimize(true)
     end)
@@ -413,11 +412,33 @@ local function SetCameraEngineActive(active)
     end
 end
 
+-- ⚡ [ฟังก์ชันควบคุมระบบทะลุกำแพง (Noclip)]
+local function SetNoclipActive(active)
+    if NoclipConnection then NoclipConnection:Disconnect() NoclipConnection = nil end
+    if active then
+        NoclipConnection = RunService.Stepped:Connect(function()
+            if MacroData.IsPlaying then
+                local Char = LocalPlayer.Character
+                if Char then
+                    for _, part in ipairs(Char:GetDescendants()) do
+                        if part:IsA("BasePart") and part.CanCollide then
+                            part.CanCollide = false
+                        end
+                    end
+                end
+            else
+                if NoclipConnection then NoclipConnection:Disconnect() NoclipConnection = nil end
+            end
+        end)
+    end
+end
+
 local function StopPlayback()
     MacroData.IsPlaying = false
     MacroData.CurrentIndex = 1
     SaveCurrentSystemState(false)
     SetCameraEngineActive(false)
+    SetNoclipActive(false) -- ⚡ ปิดระบบทะลุกำแพงเมื่อหยุดเล่นมาโคร
     local _, Hum = GetCharacterElements()
     if Hum then Hum:Move(Vector3.new(0,0,0)) end
     SetControlsEnabled(true)
@@ -586,6 +607,9 @@ StartPlaybackEngine = function()
 
         if firstCameraCFrame then CurrentTargetCameraCFrame = firstCameraCFrame SetCameraEngineActive(true) end
 
+        -- ⚡ เริ่มทำงานระบบ Noclip ทะลุกำแพงทันทีที่ระบบพร้อมเล่นมาโคร
+        SetNoclipActive(true)
+
         if startPosition then
             BtnPlay.Text = "PREPARING..."
             BtnPlay.BackgroundColor3 = Color3.fromRGB(240, 140, 0)
@@ -618,6 +642,11 @@ StartPlaybackEngine = function()
             elseif Node.Type == "Walk" then
                 Root, Hum = GetCharacterElements()
                 if Root and Hum and Hum.Health > 0 then
+                    -- ⚡ [Falling Void Protection] ระบบป้องกันตกแมพจากการทะลุกำแพง
+                    if Root.Position.Y < -500 then 
+                        Root.CFrame = CFrame.new(Node.Position + Vector3.new(0, 3, 0))
+                    end
+
                     Hum:MoveTo(Node.Position)
                     while MacroData.IsPlaying and Root and Hum and Hum.Health > 0 do
                         if (Root.Position - Node.Position).Magnitude <= 2.5 then break end
@@ -631,7 +660,6 @@ StartPlaybackEngine = function()
                 local cx = Node.X
                 local cy = Node.Y
                 
-                -- [[ ⚡ พิกัดแม่นยำดั้งเดิม ดันลงมากลางเนื้อปุ่มพอดีเป๊ะ ]]
                 if Node.Y < 40 then 
                     cx = cx + MacroData.OffsetX
                     cy = cy + 22 
@@ -716,10 +744,8 @@ local function AutoLoadAndResumeEngine()
     end)
 end
 
--- รันโหลดข้อมูล
 AutoLoadAndResumeEngine()
 
--- [[ ⚡ จุดอัปเดตใหม่: บังคับย่อหน้าต่างทั้งหมดทันทีหลังจากเปิดสคริปต์ ]]
 for _, minimizeFunc in ipairs(AutoMinimizeRegistry) do
     pcall(minimizeFunc)
 end
