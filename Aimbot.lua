@@ -37,9 +37,9 @@ local RECORD_KEYS = {
     "One","Two","Three","Four","Five"
 }
 
--- [[ สร้างหน้าจอหลักแบบ V16.1 ]]
+-- [[ สร้างหน้าจอหลักแบบ V16.2 ]]
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "DreamTeamMacro_V16_1_Perfect_Edition"
+ScreenGui.Name = "DreamTeamMacro_V16_2_Ultimate_Edition"
 ScreenGui.ResetOnSpawn = false
 
 local successGui, errGui = pcall(function()
@@ -123,7 +123,7 @@ end
 local PlayFrame = Instance.new("Frame", ScreenGui)
 PlayFrame.Size = UDim2.new(0, 170, 0, 175)
 PlayFrame.Position = UDim2.new(0, 15, 0, 40)
-PlayFrame.BackgroundColor3 = Color3.fromRGB(255, 25, 25)
+PlayFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 PlayFrame.BackgroundTransparency = 0.1
 Instance.new("UICorner", PlayFrame).CornerRadius = UDim.new(0, 10)
 MakeDraggable(PlayFrame)
@@ -586,7 +586,7 @@ end)
 BtnRenameCancel.MouseButton1Click:Connect(function() RenamePopup.Visible = false end)
 
 -- ====================================================================
--- [[ ตัวประมวลผลการจำลองทัชและแก้บัคพิกัดขอบบนสุด ]]
+-- [[ ตัวประมวลผลการจำลองทัช V16.2 ]]
 -- ====================================================================
 StartPlaybackEngine = function()
     local activeProfile = MacroData.Profiles[MacroData.ActiveProfileName]
@@ -673,21 +673,18 @@ StartPlaybackEngine = function()
                 if cx > (viewSize.X - minSafe) then cx = viewSize.X - minSafe end
                 if cy > (viewSize.Y - minSafe) then cy = viewSize.Y - minSafe end
                 
-                -- [[ ⚡ ปรับแต่งความเสถียรในการคลิกเพื่อแก้บั๊กยูนิตออกเบิ้ล ]]
+                -- [[ ⚡ ปรับแต่งความนิ่งในการกดสั่งรันมาโครเพื่อแก้ปัญหาตัวละครออกเกิน ]]
                 pcall(function()
                     VirtualInputManager:SendMouseMoveEvent(cx, cy, game)
-                    task.wait(0.03) -- ⚡ เพิ่มเวลาเลื่อนเมาส์ก่อนกด
-                    
-                    VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
-                    task.wait(0.06) -- ⚡ เพิ่มดีเลย์ตอนกดแช่นิ้วลง เพื่อให้เกมรับรู้การกดแบบสมบูรณ์ชัวร์ๆ
-                    VirtualInputManager:SendMouseMoveEvent(cx + 1, cy, game)
-                    task.wait(0.03)
-                    VirtualInputManager:SendMouseButtonEvent(cx + 1, cy, 0, false, game, 1) -- ยกนิ้วขึ้น
+                    task.wait(0.02)
+                    VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 1) -- กดลง
+                    task.wait(0.08) -- ⚡ ยืดเวลาแช่นิ้วขึ้นอีกเล็กน้อยให้เซิร์ฟเวอร์เกมล็อกเป้าและตอบสนองทัน
+                    VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, false, game, 1) -- ปล่อยนิ้วทันที ณ จุดเดิม ไม่สะบัด
                 end)
                 
-                -- ⚡ บังคับหน่วงเวลาหลังคลิกเสร็จเสร็จสิ้น 0.15 วินาที เพื่อล้างประวัติคำสั่งไม่ให้เบิ้ลจังหวะถัดไป
-                task.wait(0.15)
-                task.wait(math.max(0.01, WaitTime - 0.27))
+                -- ⚡ บังคับหน่วงเวลาจบคำสั่งคลิก 0.18 วินาที เพื่อล้างดีเลย์ไม่ให้ประมวลผลคำสั่งถัดไปไวเกินไป
+                task.wait(0.18)
+                task.wait(math.max(0.01, WaitTime - 0.28))
 
             elseif Node.Type == "KeyPress" then
                 local ok, keyCode = pcall(function()
@@ -806,7 +803,7 @@ BtnPlay.MouseButton1Click:Connect(function()
 end)
 
 -- ====================================================================
--- [[ ระบบตรวจจับหน้าจอมือถือดั้งเดิม (TouchStarted) ของ V17.1 ]]
+-- [[ ⚡ ปรับจังหวะป้องกันนิ้วลั่นขณะบันทึกมาโคร (ขยายกรงดัก Cooldown) ]]
 -- ====================================================================
 UserInputService.TouchStarted:Connect(function(touch, processed)
     if not MacroData.IsRecording or MacroData.ActiveProfileName == "" then return end
@@ -817,7 +814,8 @@ UserInputService.TouchStarted:Connect(function(touch, processed)
     end
     
     local currentTime = tick()
-    if (currentTime - lastClickTime) > 0.05 then
+    -- ⚡ ขยายคูลดาวน์เป็น 0.2 วินาที เพื่อกรองการคลิกเบิ้ล/ลั่นโดยไม่ตั้งใจจากจอมือถือ
+    if (currentTime - lastClickTime) > 0.20 then
         lastClickTime = currentTime
         table.insert(MacroData.Profiles[MacroData.ActiveProfileName], {
             Time = currentTime - MacroData.StartTime,
