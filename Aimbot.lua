@@ -37,9 +37,9 @@ local RECORD_KEYS = {
     "One","Two","Three","Four","Five"
 }
 
--- [[ สร้างหน้าจอหลักแบบ V16.3 ]]
+-- [[ สร้างหน้าจอหลักแบบ V16.1 ]]
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "DreamTeamMacro_V16_3_Ultimate_Dynamic"
+ScreenGui.Name = "DreamTeamMacro_V16_1_Perfect_Edition"
 ScreenGui.ResetOnSpawn = false
 
 local successGui, errGui = pcall(function()
@@ -123,7 +123,7 @@ end
 local PlayFrame = Instance.new("Frame", ScreenGui)
 PlayFrame.Size = UDim2.new(0, 170, 0, 175)
 PlayFrame.Position = UDim2.new(0, 15, 0, 40)
-PlayFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+PlayFrame.BackgroundColor3 = Color3.fromRGB(255, 25, 25)
 PlayFrame.BackgroundTransparency = 0.1
 Instance.new("UICorner", PlayFrame).CornerRadius = UDim.new(0, 10)
 MakeDraggable(PlayFrame)
@@ -673,20 +673,21 @@ StartPlaybackEngine = function()
                 if cx > (viewSize.X - minSafe) then cx = viewSize.X - minSafe end
                 if cy > (viewSize.Y - minSafe) then cy = viewSize.Y - minSafe end
                 
-                -- [[ ⚡ ปรับแต่งหัวใจการคลิกขารัน V16.3 ตามเงื่อนไขของนายเพื่อหยุดปัญหาการออกเบิ้ลชัวร์ๆ ]]
+                -- [[ ⚡ ปรับแต่งความเสถียรในการคลิกเพื่อแก้บั๊กยูนิตออกเบิ้ล ]]
                 pcall(function()
                     VirtualInputManager:SendMouseMoveEvent(cx, cy, game)
-                    task.wait(0.03) 
+                    task.wait(0.03) -- ⚡ เพิ่มเวลาเลื่อนเมาส์ก่อนกด
                     
-                    VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 1) -- กดแช่นิ้วลง
-                    task.wait(0.06) -- ⚡ [จุดสำคัญที่แก้] เพิ่มจังหวะแช่นิ้วล็อคเป้าให้เซิร์ฟเกมรับคำสั่งสมบูรณ์
-                    
-                    VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, false, game, 1) -- ปล่อยนิ้วขึ้นที่พิกัดเดิมทันที
+                    VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
+                    task.wait(0.06) -- ⚡ เพิ่มดีเลย์ตอนกดแช่นิ้วลง เพื่อให้เกมรับรู้การกดแบบสมบูรณ์ชัวร์ๆ
+                    VirtualInputManager:SendMouseMoveEvent(cx + 1, cy, game)
+                    task.wait(0.03)
+                    VirtualInputManager:SendMouseButtonEvent(cx + 1, cy, 0, false, game, 1) -- ยกนิ้วขึ้น
                 end)
                 
-                -- ⚡ [จุดสำคัญที่แก้] บังคับพักระบบ Clear Cooldown เพื่อหน่วงเวลาให้เกมนิ่ง ป้องกันคิวถัดไปเบิ้ลซ้ำ
+                -- ⚡ บังคับหน่วงเวลาหลังคลิกเสร็จเสร็จสิ้น 0.15 วินาที เพื่อล้างประวัติคำสั่งไม่ให้เบิ้ลจังหวะถัดไป
                 task.wait(0.15)
-                task.wait(math.max(0.01, WaitTime - 0.24))
+                task.wait(math.max(0.01, WaitTime - 0.27))
 
             elseif Node.Type == "KeyPress" then
                 local ok, keyCode = pcall(function()
@@ -805,7 +806,7 @@ BtnPlay.MouseButton1Click:Connect(function()
 end)
 
 -- ====================================================================
--- [[ ระบบตรวจจับหน้าจอมือถือดั้งเดิม (TouchStarted) เสถียรสูงดั่งเดิม ]]
+-- [[ ระบบตรวจจับหน้าจอมือถือดั้งเดิม (TouchStarted) ของ V17.1 ]]
 -- ====================================================================
 UserInputService.TouchStarted:Connect(function(touch, processed)
     if not MacroData.IsRecording or MacroData.ActiveProfileName == "" then return end
