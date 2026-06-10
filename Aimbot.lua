@@ -16,7 +16,7 @@ local STATE_FILE = FILE_PREFIX .. "SystemState.json"
 local lastP = nil
 local lastCamCF = nil
 local CamConnection = nil
-local NoclipConnection = nil -- สำหรับระบบทะลุกำแพง
+local NoclipConnection = nil 
 local CurrentTargetCameraCFrame = nil
 local run_check = 0
 local lastClickTime = 0 
@@ -37,9 +37,9 @@ local RECORD_KEYS = {
     "One","Two","Three","Four","Five"
 }
 
--- [[ สร้างหน้าจอหลักแบบ V16 ]]
+-- [[ สร้างหน้าจอหลักแบบ V16.1 ]]
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "DreamTeamMacro_V16_Perfect_Edition"
+ScreenGui.Name = "DreamTeamMacro_V16_1_Perfect_Edition"
 ScreenGui.ResetOnSpawn = false
 
 local successGui, errGui = pcall(function()
@@ -123,7 +123,7 @@ end
 local PlayFrame = Instance.new("Frame", ScreenGui)
 PlayFrame.Size = UDim2.new(0, 170, 0, 175)
 PlayFrame.Position = UDim2.new(0, 15, 0, 40)
-PlayFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+PlayFrame.BackgroundColor3 = Color3.fromRGB(255, 25, 25)
 PlayFrame.BackgroundTransparency = 0.1
 Instance.new("UICorner", PlayFrame).CornerRadius = UDim.new(0, 10)
 MakeDraggable(PlayFrame)
@@ -412,7 +412,6 @@ local function SetCameraEngineActive(active)
     end
 end
 
--- ⚡ [ฟังก์ชันควบคุมระบบทะลุกำแพง (Noclip)]
 local function SetNoclipActive(active)
     if NoclipConnection then NoclipConnection:Disconnect() NoclipConnection = nil end
     if active then
@@ -438,7 +437,7 @@ local function StopPlayback()
     MacroData.CurrentIndex = 1
     SaveCurrentSystemState(false)
     SetCameraEngineActive(false)
-    SetNoclipActive(false) -- ⚡ ปิดระบบทะลุกำแพงเมื่อหยุดเล่นมาโคร
+    SetNoclipActive(false) 
     local _, Hum = GetCharacterElements()
     if Hum then Hum:Move(Vector3.new(0,0,0)) end
     SetControlsEnabled(true)
@@ -607,7 +606,6 @@ StartPlaybackEngine = function()
 
         if firstCameraCFrame then CurrentTargetCameraCFrame = firstCameraCFrame SetCameraEngineActive(true) end
 
-        -- ⚡ เริ่มทำงานระบบ Noclip ทะลุกำแพงทันทีที่ระบบพร้อมเล่นมาโคร
         SetNoclipActive(true)
 
         if startPosition then
@@ -642,7 +640,6 @@ StartPlaybackEngine = function()
             elseif Node.Type == "Walk" then
                 Root, Hum = GetCharacterElements()
                 if Root and Hum and Hum.Health > 0 then
-                    -- ⚡ [Falling Void Protection] ระบบป้องกันตกแมพจากการทะลุกำแพง
                     if Root.Position.Y < -500 then 
                         Root.CFrame = CFrame.new(Node.Position + Vector3.new(0, 3, 0))
                     end
@@ -676,17 +673,21 @@ StartPlaybackEngine = function()
                 if cx > (viewSize.X - minSafe) then cx = viewSize.X - minSafe end
                 if cy > (viewSize.Y - minSafe) then cy = viewSize.Y - minSafe end
                 
+                -- [[ ⚡ ปรับแต่งความเสถียรในการคลิกเพื่อแก้บั๊กยูนิตออกเบิ้ล ]]
                 pcall(function()
                     VirtualInputManager:SendMouseMoveEvent(cx, cy, game)
-                    task.wait(0.01)
+                    task.wait(0.03) -- ⚡ เพิ่มเวลาเลื่อนเมาส์ก่อนกด
                     
                     VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
-                    task.wait(0.02)
+                    task.wait(0.06) -- ⚡ เพิ่มดีเลย์ตอนกดแช่นิ้วลง เพื่อให้เกมรับรู้การกดแบบสมบูรณ์ชัวร์ๆ
                     VirtualInputManager:SendMouseMoveEvent(cx + 1, cy, game)
-                    task.wait(0.02)
-                    VirtualInputManager:SendMouseButtonEvent(cx + 1, cy, 0, false, game, 1)
+                    task.wait(0.03)
+                    VirtualInputManager:SendMouseButtonEvent(cx + 1, cy, 0, false, game, 1) -- ยกนิ้วขึ้น
                 end)
-                task.wait(math.max(0.01, WaitTime - 0.05))
+                
+                -- ⚡ บังคับหน่วงเวลาหลังคลิกเสร็จเสร็จสิ้น 0.15 วินาที เพื่อล้างประวัติคำสั่งไม่ให้เบิ้ลจังหวะถัดไป
+                task.wait(0.15)
+                task.wait(math.max(0.01, WaitTime - 0.27))
 
             elseif Node.Type == "KeyPress" then
                 local ok, keyCode = pcall(function()
