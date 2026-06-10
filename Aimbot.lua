@@ -37,9 +37,9 @@ local RECORD_KEYS = {
     "One","Two","Three","Four","Five"
 }
 
--- [[ สร้างหน้าจอหลักแบบ V16.2 ]]
+-- [[ สร้างหน้าจอหลักแบบ V16.3 ]]
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "DreamTeamMacro_V16_2_Ultimate_Edition"
+ScreenGui.Name = "DreamTeamMacro_V16_3_Ultimate_Dynamic"
 ScreenGui.ResetOnSpawn = false
 
 local successGui, errGui = pcall(function()
@@ -586,7 +586,7 @@ end)
 BtnRenameCancel.MouseButton1Click:Connect(function() RenamePopup.Visible = false end)
 
 -- ====================================================================
--- [[ ตัวประมวลผลการจำลองทัช V16.2 ]]
+-- [[ ตัวประมวลผลการจำลองทัชและแก้บัคพิกัดขอบบนสุด ]]
 -- ====================================================================
 StartPlaybackEngine = function()
     local activeProfile = MacroData.Profiles[MacroData.ActiveProfileName]
@@ -673,18 +673,20 @@ StartPlaybackEngine = function()
                 if cx > (viewSize.X - minSafe) then cx = viewSize.X - minSafe end
                 if cy > (viewSize.Y - minSafe) then cy = viewSize.Y - minSafe end
                 
-                -- [[ ⚡ ปรับแต่งความนิ่งในการกดสั่งรันมาโครเพื่อแก้ปัญหาตัวละครออกเกิน ]]
+                -- [[ ⚡ ปรับแต่งหัวใจการคลิกขารัน V16.3 ตามเงื่อนไขของนายเพื่อหยุดปัญหาการออกเบิ้ลชัวร์ๆ ]]
                 pcall(function()
                     VirtualInputManager:SendMouseMoveEvent(cx, cy, game)
-                    task.wait(0.02)
-                    VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 1) -- กดลง
-                    task.wait(0.08) -- ⚡ ยืดเวลาแช่นิ้วขึ้นอีกเล็กน้อยให้เซิร์ฟเวอร์เกมล็อกเป้าและตอบสนองทัน
-                    VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, false, game, 1) -- ปล่อยนิ้วทันที ณ จุดเดิม ไม่สะบัด
+                    task.wait(0.03) 
+                    
+                    VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 1) -- กดแช่นิ้วลง
+                    task.wait(0.06) -- ⚡ [จุดสำคัญที่แก้] เพิ่มจังหวะแช่นิ้วล็อคเป้าให้เซิร์ฟเกมรับคำสั่งสมบูรณ์
+                    
+                    VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, false, game, 1) -- ปล่อยนิ้วขึ้นที่พิกัดเดิมทันที
                 end)
                 
-                -- ⚡ บังคับหน่วงเวลาจบคำสั่งคลิก 0.18 วินาที เพื่อล้างดีเลย์ไม่ให้ประมวลผลคำสั่งถัดไปไวเกินไป
-                task.wait(0.18)
-                task.wait(math.max(0.01, WaitTime - 0.28))
+                -- ⚡ [จุดสำคัญที่แก้] บังคับพักระบบ Clear Cooldown เพื่อหน่วงเวลาให้เกมนิ่ง ป้องกันคิวถัดไปเบิ้ลซ้ำ
+                task.wait(0.15)
+                task.wait(math.max(0.01, WaitTime - 0.24))
 
             elseif Node.Type == "KeyPress" then
                 local ok, keyCode = pcall(function()
@@ -803,7 +805,7 @@ BtnPlay.MouseButton1Click:Connect(function()
 end)
 
 -- ====================================================================
--- [[ ⚡ ปรับจังหวะป้องกันนิ้วลั่นขณะบันทึกมาโคร (ขยายกรงดัก Cooldown) ]]
+-- [[ ระบบตรวจจับหน้าจอมือถือดั้งเดิม (TouchStarted) เสถียรสูงดั่งเดิม ]]
 -- ====================================================================
 UserInputService.TouchStarted:Connect(function(touch, processed)
     if not MacroData.IsRecording or MacroData.ActiveProfileName == "" then return end
@@ -814,8 +816,7 @@ UserInputService.TouchStarted:Connect(function(touch, processed)
     end
     
     local currentTime = tick()
-    -- ⚡ ขยายคูลดาวน์เป็น 0.2 วินาที เพื่อกรองการคลิกเบิ้ล/ลั่นโดยไม่ตั้งใจจากจอมือถือ
-    if (currentTime - lastClickTime) > 0.20 then
+    if (currentTime - lastClickTime) > 0.05 then
         lastClickTime = currentTime
         table.insert(MacroData.Profiles[MacroData.ActiveProfileName], {
             Time = currentTime - MacroData.StartTime,
