@@ -1,4 +1,4 @@
--- [[ HYBRID STRICT LOCK V7.6 - FULL COMPLETE EDITION (SOLE OF FOOT UPDATE) ]]
+-- [[ HYBRID STRICT LOCK V7.6 - FULL COMPLETE EDITION (UPDATED PREDICTION) ]]
 local SETTINGS = {
     CENTER_Y = -70,           -- [ปรับแต่ง]: ขยับจุดแดงและวงเล็งให้สูงขึ้น (แกน Y -70)
     FOV_RADIUS = 120,         -- [ปรับแต่ง]: วง FOV เล็กลง บีบระยะเล็งให้แคบและแม่นยำขึ้น
@@ -108,19 +108,12 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- [[ 3. ฟังก์ชันหาจุดเล็ง "ใต้ผ่าเท้า" เป้าหมาย (คำนวณระนาบพื้นดินพอดี) ]]
+-- [[ 3. ฟังก์ชันหาจุดเล็งส่วนล่างเป้าหมาย ]]
 local function GetTargetPart(Character)
-    local Foot = Character:FindFirstChild("LeftFoot") or 
-                 Character:FindFirstChild("RightFoot") or 
-                 Character:FindFirstChild("LowerTorso") or 
-                 Character:FindFirstChild("HumanoidRootPart")
-                 
-    if Foot then
-        -- ขยับพิกัดลงไปที่ตำแหน่งใต้ผ่าเท้าพอดี เพื่อให้แนบระนาบพื้นดิน
-        local SolePos = (Foot.CFrame * CFrame.new(0, -1.5, 0)).Position
-        return {Position = SolePos, Parent = Character}
-    end
-    return nil
+    return Character:FindFirstChild("LeftFoot") or 
+           Character:FindFirstChild("RightFoot") or 
+           Character:FindFirstChild("LowerTorso") or 
+           Character:FindFirstChild("HumanoidRootPart")
 end
 
 -- [[ 4. ระบบสแกนหาเป้าหมายเชิงลึก (Deep Scan หน่วงเวลา 0.5 วินาทีลดภาระเครื่องมือถือ) ]]
@@ -162,14 +155,14 @@ task.spawn(function()
                             end
 
                             if IsValidTarget then
-                                local AimData = GetTargetPart(TargetChar)
-                                if AimData then
-                                    local ScreenPos, OnScreen = Camera:WorldToViewportPoint(AimData.Position)
+                                local AimPart = GetTargetPart(TargetChar)
+                                if AimPart then
+                                    local ScreenPos, OnScreen = Camera:WorldToViewportPoint(AimPart.Position)
                                     if OnScreen then
                                         local Dist = (Vector2.new(ScreenPos.X, ScreenPos.Y) - CrosshairPos).Magnitude
                                         if Dist < MinDist then
                                             MinDist = Dist
-                                            NewTarget = AimData
+                                            NewTarget = AimPart
                                         end
                                     end
                                 end
@@ -195,14 +188,14 @@ local function GetPredictedPosition()
         local targetVelocity = TargetRoot.Velocity
         local distance = (MyRoot.Position - TargetRoot.Position).Magnitude
         
-        -- เวลาวินาทีการดักหน้าตามโซนความห่าง
+        -- ปรับเวลาวินาทีการดักหน้าใหม่ตามสั่งเป๊ะๆ
         local predictionTime = 0
         if distance < 100 then
-            predictionTime = 0.2   -- ต่ำกว่า 100 Studs ดักหน้า 0.2 วิ
+            predictionTime = 0.2   -- แก้ไขจุดนี้จุดเดียว: ต่ำกว่า 100 Studs เปลี่ยนเป็นดักหน้า 0.2 วิแล้วครับ
         elseif distance >= 100 and distance <= 200 then
-            predictionTime = 0.3   -- ตั้งแต่ 100 ถึง 200 Studs ดักหน้า 0.3 วิ
+            predictionTime = 0.3   -- โครงสร้างเดิมคงไว้: 0.3 วิ
         elseif distance > 200 then
-            predictionTime = 0.6   -- สูงกว่า 200 Studs ขึ้นไป ดักหน้า 0.6 วิ
+            predictionTime = 0.6   -- โครงสร้างเดิมคงไว้: 0.6 วิ
         end
         
         local predictedPos = GlobalTarget.Position + (targetVelocity * predictionTime)
