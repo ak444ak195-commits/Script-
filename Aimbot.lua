@@ -1,883 +1,306 @@
-local HttpService = game:GetService("HttpService")
+-- [[ HYBRID STRICT LOCK V7.6 - FULL COMPLETE EDITION ]]
+local SETTINGS = {
+    CENTER_Y = -70,           -- [ปรับแต่ง]: ขยับจุดแดงและวงเล็งให้สูงขึ้น (แกน Y -70)
+    FOV_RADIUS = 120,         -- [ปรับแต่ง]: วง FOV เล็กลง บีบระยะเล็งให้แคบและแม่นยำขึ้น
+    LOCK_ENABLED = false,     -- เริ่มต้นแบบปิดชัวร์ๆ
+    TARGET_MODE = "Monster",  -- โหมดเริ่มต้น: "Monster" หรือ "Player"
+    HIGHLIGHT_COLOR = Color3.fromRGB(255, 255, 0),
+    FOV_COLOR = Color3.fromRGB(255, 0, 0) -- เส้นขอบวงกลมสีแดง
+}
+
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local CoreGui = game:GetService("CoreGui")
-local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local GuiService = game:GetService("GuiService")
-local NetworkClient = game:GetService("NetworkClient")
 local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
+local Camera = workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
 
-local FILE_PREFIX = "DT_Macro_"
-local STATE_FILE = FILE_PREFIX .. "SystemState.json"
+-- [[ 1. Visuals Setup & UI ]]
+local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
 
-local lastP = nil
-local lastCamCF = nil
-local CamConnection = nil
-local NoclipConnection = nil 
-local CurrentTargetCameraCFrame = nil
-local run_check = 0
-local lastClickTime = 0 
+local ControlPanel = Instance.new("Frame", ScreenGui)
+ControlPanel.Size = UDim2.new(0, 160, 0, 90)
+ControlPanel.Position = UDim2.new(0.8, 0, 0.1, 0)
+ControlPanel.BackgroundTransparency = 1 
+ControlPanel.Active = true
 
-local MacroData = {
-    IsRecording = false,
-    IsPlaying = false,
-    StartTime = 0,
-    CurrentIndex = 1,
-    OffsetX = 30, 
-    OffsetY = 55, 
-    ActiveProfileName = "", 
-    Profiles = {}
-}
+local Toggle = Instance.new("TextButton", ControlPanel)
+Toggle.Size = UDim2.new(1, 0, 0, 35)
+Toggle.Position = UDim2.new(0, 0, 0, 0)
+Toggle.Text = "HYBRID AIM: OFF"; Toggle.BackgroundColor3 = Color3.fromRGB(50, 50, 50); 
+Toggle.TextColor3 = Color3.fromRGB(255, 255, 255); Toggle.Font = Enum.Font.SourceSansBold; 
+Instance.new("UICorner", Toggle)
 
-local RECORD_KEYS = {
-    "E","Z","X","C","V","T","J","R","F","Q","G","H","Space",
-    "One","Two","Three","Four","Five"
-}
+local ModeBtn = Instance.new("TextButton", ControlPanel)
+ModeBtn.Size = UDim2.new(1, 0, 0, 35)
+ModeBtn.Position = UDim2.new(0, 0, 0, 45)
+ModeBtn.Text = "MODE: MONSTER"; ModeBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 80); 
+ModeBtn.TextColor3 = Color3.fromRGB(255, 255, 255); ModeBtn.Font = Enum.Font.SourceSansBold; 
+Instance.new("UICorner", ModeBtn)
 
--- [[ สร้างหน้าจอหลักแบบ V16.1 ]]
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "DreamTeamMacro_V16_1_Perfect_Edition"
-ScreenGui.ResetOnSpawn = false
+local RedDot = Instance.new("Frame", ScreenGui)
+RedDot.Size = UDim2.new(0, 6, 0, 6); RedDot.BackgroundColor3 = Color3.fromRGB(255, 0, 0); 
+RedDot.Position = UDim2.new(0.5, 0, 0.5, SETTINGS.CENTER_Y); RedDot.AnchorPoint = Vector2.new(0.5, 0.5); 
+Instance.new("UICorner", RedDot)
 
-local successGui, errGui = pcall(function()
-    ScreenGui.Parent = CoreGui
-end)
-if not successGui then
-    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-end
+local MobileFOVCircle = Instance.new("Frame", ScreenGui)
+MobileFOVCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+MobileFOVCircle.BackgroundColor3 = SETTINGS.FOV_COLOR
+MobileFOVCircle.BackgroundTransparency = 1 
+MobileFOVCircle.Size = UDim2.new(0, SETTINGS.FOV_RADIUS * 2, 0, SETTINGS.FOV_RADIUS * 2)
+MobileFOVCircle.Position = UDim2.new(0.5, 0, 0.5, SETTINGS.CENTER_Y)
+MobileFOVCircle.Visible = true 
 
-local function MakeDraggable(frame)
-    local dragging, dragStart, startPos
-    frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true; dragStart = input.Position; startPos = frame.Position
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - dragStart
-            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
-end
+local FOVStroke = Instance.new("UIStroke", MobileFOVCircle)
+FOVStroke.Color = SETTINGS.FOV_COLOR
+FOVStroke.Thickness = 1.2
 
-local AutoMinimizeRegistry = {}
+local FOVCorner = Instance.new("UICorner", MobileFOVCircle)
+FOVCorner.CornerRadius = UDim.new(1, 0)
 
-local function AddMinimizeFeature(frame, expandedHeight)
-    local minBtn = Instance.new("TextButton", frame)
-    minBtn.Size = UDim2.new(0, 24, 0, 20)
-    minBtn.Position = UDim2.new(1, -28, 0, 4)
-    minBtn.Text = "-"
-    minBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    minBtn.Font = Enum.Font.SourceSansBold
-    minBtn.TextSize = 14
-    Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 4)
-
-    local isMinimized = false
-    
-    local function ToggleMinimize(forceMinimize)
-        if forceMinimize ~= nil then
-            isMinimized = forceMinimize
-        else
-            isMinimized = not isMinimized
-        end
-        
-        if isMinimized then
-            for _, child in ipairs(frame:GetChildren()) do
-                if child ~= minBtn and not child:IsA("UICorner") and child.Name ~= "Title" then
-                    if child:IsA("GuiObject") then child.Visible = false end
-                end
-            end
-            frame.Size = UDim2.new(frame.Size.X.Scale, frame.Size.X.Offset, 0, 28)
-            minBtn.Text = "+"
-        else
-            frame.Size = UDim2.new(frame.Size.X.Scale, frame.Size.X.Offset, 0, expandedHeight)
-            for _, child in ipairs(frame:GetChildren()) do
-                if child.Name ~= "RenamePopup" then
-                    if child:IsA("GuiObject") then child.Visible = true end
-                end
-            end
-            minBtn.Text = "-"
-        end
+local TargetHighlight = nil
+local function CheckHighlight()
+    if not TargetHighlight or not TargetHighlight.Parent then
+        if TargetHighlight then pcall(function() TargetHighlight:Destroy() end) end
+        TargetHighlight = Instance.new("Highlight")
+        TargetHighlight.FillTransparency = 1
+        TargetHighlight.OutlineColor = SETTINGS.HIGHLIGHT_COLOR
+        TargetHighlight.Enabled = false
     end
+end
+CheckHighlight()
 
-    minBtn.MouseButton1Click:Connect(function()
-        ToggleMinimize()
+-- [[ 2. ระบบ Drag ลากย้ายปุ่มสำหรับมือถือ ]]
+local dragging, dragInput, dragStart, startPos
+local function update(input)
+    local delta = input.Position - dragStart
+    ControlPanel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+local function TargetDrag(ButtonInstance)
+    ButtonInstance.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = ControlPanel.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
     end)
     
-    table.insert(AutoMinimizeRegistry, function()
-        ToggleMinimize(true)
-    end)
-end
-
--- ส่วนที่ 1: CURRENT (ฝั่งซ้าย)
-local PlayFrame = Instance.new("Frame", ScreenGui)
-PlayFrame.Size = UDim2.new(0, 170, 0, 175)
-PlayFrame.Position = UDim2.new(0, 15, 0, 40)
-PlayFrame.BackgroundColor3 = Color3.fromRGB(255, 25, 25)
-PlayFrame.BackgroundTransparency = 0.1
-Instance.new("UICorner", PlayFrame).CornerRadius = UDim.new(0, 10)
-MakeDraggable(PlayFrame)
-AddMinimizeFeature(PlayFrame, 175)
-
-local TitlePlay = Instance.new("TextLabel", PlayFrame)
-TitlePlay.Name = "Title"
-TitlePlay.Size = UDim2.new(1, -35, 0, 22)
-TitlePlay.Position = UDim2.new(0, 8, 0, 4)
-TitlePlay.Text = "CURRENT: NONE"
-TitlePlay.TextColor3 = Color3.fromRGB(0, 200, 255)
-TitlePlay.Font = Enum.Font.SourceSansBold
-TitlePlay.TextSize = 13
-TitlePlay.TextXAlignment = Enum.TextXAlignment.Left
-TitlePlay.BackgroundTransparency = 1
-
-local ProgressLabel = Instance.new("TextLabel", PlayFrame)
-ProgressLabel.Size = UDim2.new(1, 0, 0, 18)
-ProgressLabel.Position = UDim2.new(0, 0, 0, 27)
-ProgressLabel.Text = "Node: -/-"
-ProgressLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-ProgressLabel.Font = Enum.Font.SourceSans
-ProgressLabel.TextSize = 12
-ProgressLabel.BackgroundTransparency = 1
-
-local function CreatePlayBtn(text, pos, color)
-    local btn = Instance.new("TextButton", PlayFrame)
-    btn.Size = UDim2.new(0.85, 0, 0, 32)
-    btn.Position = pos
-    btn.Text = text
-    btn.BackgroundColor3 = color
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.SourceSansBold
-    btn.TextSize = 13
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-    return btn
-end
-
-local BtnRecord = CreatePlayBtn("⏺ RECORD", UDim2.new(0.075, 0, 0, 52), Color3.fromRGB(180, 40, 40))
-local BtnPlay   = CreatePlayBtn("▶ PLAY",   UDim2.new(0.075, 0, 0, 92), Color3.fromRGB(40, 140, 40))
-
-local DurationLabel = Instance.new("TextLabel", PlayFrame)
-DurationLabel.Size = UDim2.new(1, 0, 0, 16)
-DurationLabel.Position = UDim2.new(0, 0, 0, 134)
-DurationLabel.Text = "Duration: --"
-DurationLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
-DurationLabel.Font = Enum.Font.SourceSans
-DurationLabel.TextSize = 11
-DurationLabel.BackgroundTransparency = 1
-
--- ส่วนที่ 2: CREATE PROFILE (ตรงกลาง)
-local CreateFrame = Instance.new("Frame", ScreenGui)
-CreateFrame.Size = UDim2.new(0, 170, 0, 110)
-CreateFrame.Position = UDim2.new(0, 195, 0, 40)
-CreateFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-CreateFrame.BackgroundTransparency = 0.1
-Instance.new("UICorner", CreateFrame).CornerRadius = UDim.new(0, 10)
-MakeDraggable(CreateFrame)
-AddMinimizeFeature(CreateFrame, 110)
-
-local TitleCreate = Instance.new("TextLabel", CreateFrame)
-TitleCreate.Name = "Title"
-TitleCreate.Size = UDim2.new(1, -35, 0, 22)
-TitleCreate.Position = UDim2.new(0, 8, 0, 4)
-TitleCreate.Text = "CREATE PROFILE"
-TitleCreate.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleCreate.Font = Enum.Font.SourceSansBold
-TitleCreate.TextSize = 13
-TitleCreate.TextXAlignment = Enum.TextXAlignment.Left
-TitleCreate.BackgroundTransparency = 1
-
-local ProfileInput = Instance.new("TextBox", CreateFrame)
-ProfileInput.Size = UDim2.new(0.82, 0, 0, 25)
-ProfileInput.Position = UDim2.new(0.09, 0, 0, 32)
-ProfileInput.PlaceholderText = "ชื่อโปรไฟล์"
-ProfileInput.Text = ""
-ProfileInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-ProfileInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-ProfileInput.Font = Enum.Font.SourceSans
-ProfileInput.TextSize = 13
-Instance.new("UICorner", ProfileInput).CornerRadius = UDim.new(0, 5)
-
-local BtnCreate = Instance.new("TextButton", CreateFrame)
-BtnCreate.Size = UDim2.new(0.82, 0, 0, 28)
-BtnCreate.Position = UDim2.new(0.09, 0, 0, 65)
-BtnCreate.Text = "ADD NEW +"
-BtnCreate.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
-BtnCreate.TextColor3 = Color3.fromRGB(255, 255, 255)
-BtnCreate.Font = Enum.Font.SourceSansBold
-BtnCreate.TextSize = 13
-Instance.new("UICorner", BtnCreate).CornerRadius = UDim.new(0, 6)
-
--- ส่วนที่ 3: MACRO STORAGE (ฝั่งขวา)
-local StorageFrame = Instance.new("Frame", ScreenGui)
-StorageFrame.Size = UDim2.new(0, 195, 0, 175)
-StorageFrame.Position = UDim2.new(0, 375, 0, 40)
-StorageFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-StorageFrame.BackgroundTransparency = 0.1
-Instance.new("UICorner", StorageFrame).CornerRadius = UDim.new(0, 10)
-MakeDraggable(StorageFrame)
-AddMinimizeFeature(StorageFrame, 175)
-
-local TitleStorage = Instance.new("TextLabel", StorageFrame)
-TitleStorage.Name = "Title"
-TitleStorage.Size = UDim2.new(1, -35, 0, 22)
-TitleStorage.Position = UDim2.new(0, 8, 0, 4)
-TitleStorage.Text = "MACRO STORAGE"
-TitleStorage.TextColor3 = Color3.fromRGB(0, 255, 150)
-TitleStorage.Font = Enum.Font.SourceSansBold
-TitleStorage.TextSize = 13
-TitleStorage.TextXAlignment = Enum.TextXAlignment.Left
-TitleStorage.BackgroundTransparency = 1
-
-local ListScroll = Instance.new("ScrollingFrame", StorageFrame)
-ListScroll.Size = UDim2.new(0.92, 0, 0.82, 0)
-ListScroll.Position = UDim2.new(0.04, 0, 0.16, 0)
-ListScroll.BackgroundTransparency = 1
-ListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-ListScroll.ScrollBarThickness = 3
-
-local ListLayout = Instance.new("UIListLayout", ListScroll)
-ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ListLayout.Padding = UDim.new(0, 4)
-
--- Rename Popup Frame
-local RenamePopup = Instance.new("Frame", ScreenGui)
-RenamePopup.Name = "RenamePopup"
-RenamePopup.Size = UDim2.new(0, 200, 0, 90)
-RenamePopup.Position = UDim2.new(0.5, -100, 0.4, 0)
-RenamePopup.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-RenamePopup.Visible = false
-Instance.new("UICorner", RenamePopup).CornerRadius = UDim.new(0, 10)
-MakeDraggable(RenamePopup)
-
-local RenameTitle = Instance.new("TextLabel", RenamePopup)
-RenameTitle.Size = UDim2.new(1, 0, 0, 22)
-RenameTitle.Position = UDim2.new(0, 0, 0, 4)
-RenameTitle.Text = "RENAME PROFILE"
-RenameTitle.TextColor3 = Color3.fromRGB(255, 200, 50)
-RenameTitle.Font = Enum.Font.SourceSansBold
-RenameTitle.TextSize = 13
-RenameTitle.BackgroundTransparency = 1
-
-local RenameInput = Instance.new("TextBox", RenamePopup)
-RenameInput.Size = UDim2.new(0.82, 0, 0, 25)
-RenameInput.Position = UDim2.new(0.09, 0, 0, 28)
-RenameInput.PlaceholderText = "ชื่อใหม่"
-RenameInput.Text = ""
-RenameInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-RenameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-RenameInput.Font = Enum.Font.SourceSans
-RenameInput.TextSize = 13
-Instance.new("UICorner", RenameInput).CornerRadius = UDim.new(0, 5)
-
-local RenameTargetName = ""
-
-local function CreateRenameConfirmBtn(text, pos, color)
-    local btn = Instance.new("TextButton", RenamePopup)
-    btn.Size = UDim2.new(0.38, 0, 0, 24)
-    btn.Position = pos
-    btn.Text = text
-    btn.BackgroundColor3 = color
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.SourceSansBold
-    btn.TextSize = 12
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
-    return btn
-end
-
-local BtnRenameConfirm = CreateRenameConfirmBtn("✔ OK",     UDim2.new(0.09, 0, 0, 60), Color3.fromRGB(0, 150, 80))
-local BtnRenameCancel  = CreateRenameConfirmBtn("✖ CANCEL", UDim2.new(0.53, 0, 0, 60), Color3.fromRGB(120, 30, 30))
-
--- ====================================================================
--- [[ ระบบเซฟ/โหลดสถานะ ]]
--- ====================================================================
-local function FormatDataForSave(timeline)
-    local formatted = {}
-    for _, node in ipairs(timeline) do
-        local copy = { Time = node.Time, Type = node.Type }
-        if node.Type == "Walk" then
-            copy.PosX = node.Position.X
-            copy.PosY = node.Position.Y
-            copy.PosZ = node.Position.Z
-        elseif node.Type == "Click" then
-            copy.X = node.X
-            copy.Y = node.Y
-        elseif node.Type == "CamTrack" then
-            copy.CamComps = {node.CFrameValue:GetComponents()}
-        elseif node.Type == "KeyPress" then
-            copy.Key = node.Key
-            copy.State = node.State
+    ButtonInstance.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
         end
-        table.insert(formatted, copy)
-    end
-    return formatted
-end
-
-local function ParseLoadedData(timeline)
-    local parsed = {}
-    for _, node in ipairs(timeline) do
-        local copy = { Time = node.Time, Type = node.Type }
-        if node.Type == "Walk" then
-            copy.Position = Vector3.new(node.PosX, node.PosY, node.PosZ)
-        elseif node.Type == "Click" then
-            copy.X = node.X
-            copy.Y = node.Y
-        elseif node.Type == "CamTrack" then
-            copy.CFrameValue = CFrame.new(unpack(node.CamComps))
-        elseif node.Type == "KeyPress" then
-            copy.Key = node.Key
-            copy.State = node.State
-        end
-        table.insert(parsed, copy)
-    end
-    return parsed
-end
-
-local function HardSaveToFile(name, timelineData)
-    pcall(function()
-        local cleanData = FormatDataForSave(timelineData)
-        writefile(FILE_PREFIX .. name .. ".json", HttpService:JSONEncode(cleanData))
     end)
 end
 
-local function SaveCurrentSystemState(isPlaying)
-    pcall(function()
-        writefile(STATE_FILE, HttpService:JSONEncode({
-            IsActiveBeforeLeave = isPlaying,
-            LastActiveProfile = MacroData.ActiveProfileName
-        }))
-    end)
-end
+TargetDrag(Toggle)
+TargetDrag(ModeBtn)
 
-local function ForceEmergencySave()
-    if MacroData.IsRecording and MacroData.ActiveProfileName ~= "" then
-        MacroData.IsRecording = false
-        table.insert(MacroData.Profiles[MacroData.ActiveProfileName], {
-            Time = tick() - MacroData.StartTime,
-            Type = "EndTime"
-        })
-        HardSaveToFile(MacroData.ActiveProfileName, MacroData.Profiles[MacroData.ActiveProfileName])
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
     end
-    SaveCurrentSystemState(MacroData.IsPlaying)
-end
-
-pcall(function()
-    GuiService.ErrorMessageChanged:Connect(function() ForceEmergencySave() end)
-    NetworkClient.ChildRemoved:Connect(function() ForceEmergencySave() end)
 end)
 
--- ====================================================================
--- [[ ระบบความเสถียร ]]
--- ====================================================================
-local UpdateStorageUI
-local StartPlaybackEngine
-
-function GetCharacterElements()
-    local Char = LocalPlayer.Character
-    local Root = Char and Char:FindFirstChild("HumanoidRootPart")
-    local Hum  = Char and Char:FindFirstChildOfClass("Humanoid")
-    return Root, Hum
+-- [[ 3. ฟังก์ชันหาจุดเล็งส่วนล่างเป้าหมาย ]]
+local function GetTargetPart(Character)
+    return Character:FindFirstChild("LeftFoot") or 
+           Character:FindFirstChild("RightFoot") or 
+           Character:FindFirstChild("LowerTorso") or 
+           Character:FindFirstChild("HumanoidRootPart")
 end
 
-function SetControlsEnabled(enabled)
-    local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-    if PlayerGui and PlayerGui:FindFirstChild("TouchGui") then
-        PlayerGui.TouchGui.Enabled = enabled
-    end
-end
+-- [[ 4. ระบบสแกนหาเป้าหมายเชิงลึก (Deep Scan หน่วงเวลา 0.5 วินาทีลดภาระเครื่องมือถือ) ]]
+local GlobalTarget = nil 
 
-local function SetCameraEngineActive(active)
-    if CamConnection then CamConnection:Disconnect() end
-    if active then
-        Camera.CameraType = Enum.CameraType.Scriptable
-        CamConnection = RunService.RenderStepped:Connect(function()
-            if MacroData.IsPlaying and CurrentTargetCameraCFrame then
-                Camera.CameraType = Enum.CameraType.Scriptable
-                Camera.CFrame = CurrentTargetCameraCFrame
-            else
-                if CamConnection then CamConnection:Disconnect() CamConnection = nil end
+task.spawn(function()
+    while true do
+        task.wait(0.5) 
+        Camera = workspace.CurrentCamera
+
+        if not SETTINGS.LOCK_ENABLED then
+            GlobalTarget = nil
+        else
+            local Char = LocalPlayer.Character
+            
+            local KeepCurrent = false
+            if GlobalTarget and GlobalTarget.Parent and GlobalTarget.Parent:FindFirstChild("Humanoid") then
+                if GlobalTarget.Parent.Humanoid.Health > 0 and GlobalTarget.Parent.Parent ~= nil then
+                    KeepCurrent = true
+                end
             end
-        end)
-    else
-        if CamConnection then CamConnection:Disconnect() CamConnection = nil end
-        Camera.CameraType = Enum.CameraType.Custom
-    end
-end
 
-local function SetNoclipActive(active)
-    if NoclipConnection then NoclipConnection:Disconnect() NoclipConnection = nil end
-    if active then
-        NoclipConnection = RunService.Stepped:Connect(function()
-            if MacroData.IsPlaying then
-                local Char = LocalPlayer.Character
-                if Char then
-                    for _, part in ipairs(Char:GetDescendants()) do
-                        if part:IsA("BasePart") and part.CanCollide then
-                            part.CanCollide = false
+            if not KeepCurrent then
+                local NewTarget = nil
+                local MinDist = SETTINGS.FOV_RADIUS 
+                local CrosshairPos = Vector2.new(Camera.ViewportSize.X / 2, (Camera.ViewportSize.Y / 2) + SETTINGS.CENTER_Y)
+
+                for _, obj in pairs(workspace:GetDescendants()) do
+                    if obj:IsA("Humanoid") and obj.Health > 0 and obj.Parent then
+                        local TargetChar = obj.Parent
+                        if TargetChar ~= Char and TargetChar:FindFirstChild("HumanoidRootPart") then
+                            local IsPlayer = Players:GetPlayerFromCharacter(TargetChar)
+                            local IsValidTarget = false
+                            
+                            if SETTINGS.TARGET_MODE == "Monster" and not IsPlayer then
+                                IsValidTarget = true
+                            elseif SETTINGS.TARGET_MODE == "Player" and IsPlayer then
+                                IsValidTarget = true
+                            end
+
+                            if IsValidTarget then
+                                local AimPart = GetTargetPart(TargetChar)
+                                if AimPart then
+                                    local ScreenPos, OnScreen = Camera:WorldToViewportPoint(AimPart.Position)
+                                    if OnScreen then
+                                        local Dist = (Vector2.new(ScreenPos.X, ScreenPos.Y) - CrosshairPos).Magnitude
+                                        if Dist < MinDist then
+                                            MinDist = Dist
+                                            NewTarget = AimPart
+                                        end
+                                    end
+                                end
+                            end
                         end
                     end
                 end
-            else
-                if NoclipConnection then NoclipConnection:Disconnect() NoclipConnection = nil end
+                GlobalTarget = NewTarget
             end
-        end)
-    end
-end
-
-local function StopPlayback()
-    MacroData.IsPlaying = false
-    MacroData.CurrentIndex = 1
-    SaveCurrentSystemState(false)
-    SetCameraEngineActive(false)
-    SetNoclipActive(false) 
-    local _, Hum = GetCharacterElements()
-    if Hum then Hum:Move(Vector3.new(0,0,0)) end
-    SetControlsEnabled(true)
-    BtnPlay.Text = "▶ PLAY"
-    BtnPlay.BackgroundColor3 = Color3.fromRGB(40, 140, 40)
-    ProgressLabel.Text = "Node: -/-"
-end
-
-local function UpdateDurationLabel(profileName)
-    if profileName == "" then DurationLabel.Text = "Duration: --" return end
-    local profile = MacroData.Profiles[profileName]
-    if not profile or #profile == 0 then DurationLabel.Text = "Duration: 0s" return end
-    
-    local lastTime = 0
-    for i = #profile, 1, -1 do
-        if profile[i].Type == "EndTime" or profile[i].Time then lastTime = profile[i].Time or 0 break end
-    end
-    
-    local mins = math.floor(lastTime / 60)
-    local secs = math.floor(lastTime % 60)
-    if mins > 0 then
-        DurationLabel.Text = string.format("Duration: %dm %ds | %d nodes", mins, secs, #profile)
-    else
-        DurationLabel.Text = string.format("Duration: %ds | %d nodes", secs, #profile)
-    end
-end
-
-local function UpdateProgressLabel()
-    local profile = MacroData.Profiles[MacroData.ActiveProfileName]
-    if MacroData.IsPlaying and profile then
-        ProgressLabel.Text = string.format("Node: %d/%d", MacroData.CurrentIndex, #profile)
-    else
-        ProgressLabel.Text = "Node: -/-"
-    end
-end
-
-UpdateStorageUI = function()
-    for _, child in ipairs(ListScroll:GetChildren()) do
-        if child:IsA("Frame") then child:Destroy() end
-    end
-
-    for name, profileData in pairs(MacroData.Profiles) do
-        local durationStr = "0s"
-        if #profileData > 0 then
-            local t = 0
-            for i = #profileData, 1, -1 do
-                if profileData[i].Type == "EndTime" or profileData[i].Time then t = profileData[i].Time or 0 break end
-            end
-            local m = math.floor(t/60)
-            local s = math.floor(t%60)
-            durationStr = m > 0 and string.format("%dm%ds", m, s) or string.format("%ds", s)
         end
-
-        local ItemRow = Instance.new("Frame", ListScroll)
-        ItemRow.Size = UDim2.new(1, 0, 0, 38)
-        ItemRow.BackgroundTransparency = 1
-
-        local SelectBtn = Instance.new("TextButton", ItemRow)
-        SelectBtn.Size = UDim2.new(0.52, 0, 0, 38)
-        SelectBtn.Text = "📁 " .. name .. "\n⏱ " .. durationStr
-        SelectBtn.BackgroundColor3 = (MacroData.ActiveProfileName == name) and Color3.fromRGB(0, 150, 100) or Color3.fromRGB(45, 45, 45)
-        SelectBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        SelectBtn.Font = Enum.Font.SourceSansBold
-        SelectBtn.TextSize = 11
-        SelectBtn.TextXAlignment = Enum.TextXAlignment.Left
-        Instance.new("UICorner", SelectBtn).CornerRadius = UDim.new(0, 5)
-
-        local RenBtn = Instance.new("TextButton", ItemRow)
-        RenBtn.Size = UDim2.new(0.21, 0, 0.85, 0)
-        RenBtn.Position = UDim2.new(0.54, 0, 0.075, 0)
-        RenBtn.Text = "REN"
-        RenBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 160)
-        RenBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        RenBtn.Font = Enum.Font.SourceSansBold
-        RenBtn.TextSize = 11
-        Instance.new("UICorner", RenBtn).CornerRadius = UDim.new(0, 5)
-
-        local DeleteBtn = Instance.new("TextButton", ItemRow)
-        DeleteBtn.Size = UDim2.new(0.21, 0, 0.85, 0)
-        DeleteBtn.Position = UDim2.new(0.77, 0, 0.075, 0)
-        DeleteBtn.Text = "DEL"
-        DeleteBtn.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
-        DeleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        DeleteBtn.Font = Enum.Font.SourceSansBold
-        DeleteBtn.TextSize = 11
-        Instance.new("UICorner", DeleteBtn).CornerRadius = UDim.new(0, 5)
-
-        SelectBtn.MouseButton1Click:Connect(function()
-            if MacroData.IsRecording or MacroData.IsPlaying then return end
-            MacroData.ActiveProfileName = name
-            TitlePlay.Text = "CURRENT: " .. string.upper(name)
-            UpdateDurationLabel(name)
-            UpdateStorageUI()
-            SaveCurrentSystemState(false)
-        end)
-
-        RenBtn.MouseButton1Click:Connect(function()
-            if MacroData.IsRecording or MacroData.IsPlaying then return end
-            RenameTargetName = name
-            RenameInput.Text = name
-            RenamePopup.Visible = true
-        end)
-
-        DeleteBtn.MouseButton1Click:Connect(function()
-            if MacroData.IsRecording or MacroData.IsPlaying then return end
-            pcall(function()
-                if isfile(FILE_PREFIX .. name .. ".json") then delfile(FILE_PREFIX .. name .. ".json") end
-            end)
-            MacroData.Profiles[name] = nil
-            if MacroData.ActiveProfileName == name then
-                MacroData.ActiveProfileName = ""
-                TitlePlay.Text = "CURRENT: NONE"
-                DurationLabel.Text = "Duration: --"
-                SaveCurrentSystemState(false)
-            end
-            UpdateStorageUI()
-        end)
     end
-    ListScroll.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y)
-end
-
-BtnRenameConfirm.MouseButton1Click:Connect(function()
-    local newName = RenameInput.Text:gsub("%s+", "")
-    if newName == "" or newName == RenameTargetName then RenamePopup.Visible = false return end
-    if MacroData.Profiles[newName] then return end
-
-    MacroData.Profiles[newName] = MacroData.Profiles[RenameTargetName]
-    MacroData.Profiles[RenameTargetName] = nil
-
-    pcall(function()
-        HardSaveToFile(newName, MacroData.Profiles[newName])
-        if isfile(FILE_PREFIX .. RenameTargetName .. ".json") then delfile(FILE_PREFIX .. RenameTargetName .. ".json") end
-    end)
-
-    if MacroData.ActiveProfileName == RenameTargetName then
-        MacroData.ActiveProfileName = newName
-        TitlePlay.Text = "CURRENT: " .. string.upper(newName)
-        UpdateDurationLabel(newName)
-        SaveCurrentSystemState(MacroData.IsPlaying)
-    end
-
-    RenamePopup.Visible = false
-    UpdateStorageUI()
 end)
 
-BtnRenameCancel.MouseButton1Click:Connect(function() RenamePopup.Visible = false end)
-
--- ====================================================================
--- [[ ตัวประมวลผลการจำลองทัชและแก้บัคพิกัดขอบบนสุด ]]
--- ====================================================================
-StartPlaybackEngine = function()
-    local activeProfile = MacroData.Profiles[MacroData.ActiveProfileName]
-    if not activeProfile or #activeProfile == 0 then StopPlayback() return end
-
-    task.spawn(function()
-        local Root, Hum = nil, nil
-        while not Root or not Hum do Root, Hum = GetCharacterElements() task.wait(0.5) end
-
-        local firstCameraCFrame = nil
-        local startPosition = nil
-        for _, node in ipairs(activeProfile) do
-            if node.Type == "CamTrack" and not firstCameraCFrame then firstCameraCFrame = node.CFrameValue end
-            if node.Type == "Walk"     and not startPosition     then startPosition     = node.Position     end
-            if firstCameraCFrame and startPosition then break end
-        end
-
-        if firstCameraCFrame then CurrentTargetCameraCFrame = firstCameraCFrame SetCameraEngineActive(true) end
-
-        SetNoclipActive(true)
-
-        if startPosition then
-            BtnPlay.Text = "PREPARING..."
-            BtnPlay.BackgroundColor3 = Color3.fromRGB(240, 140, 0)
-            Hum:MoveTo(startPosition)
-            while MacroData.IsPlaying and Root and Hum and Hum.Health > 0 do
-                if (Root.Position - startPosition).Magnitude <= 2.2 then break end
-                Hum:MoveTo(startPosition)
-                task.wait(0.1)
-            end
-        end
-
-        if not MacroData.IsPlaying then return end
-        BtnPlay.Text = "⏹ STOP"
-        BtnPlay.BackgroundColor3 = Color3.fromRGB(200, 60, 0)
-
-        MacroData.CurrentIndex = 1
-        while MacroData.IsPlaying do
-            if MacroData.CurrentIndex > #activeProfile then MacroData.CurrentIndex = 1 end
-
-            local Node     = activeProfile[MacroData.CurrentIndex]
-            local NextNode = activeProfile[MacroData.CurrentIndex + 1]
-            local WaitTime = NextNode and math.max(0.01, NextNode.Time - Node.Time) or 0.05
-
-            UpdateProgressLabel()
-
-            if Node.Type == "CamTrack" then
-                CurrentTargetCameraCFrame = Node.CFrameValue
-                task.wait(WaitTime)
-
-            elseif Node.Type == "Walk" then
-                Root, Hum = GetCharacterElements()
-                if Root and Hum and Hum.Health > 0 then
-                    if Root.Position.Y < -500 then 
-                        Root.CFrame = CFrame.new(Node.Position + Vector3.new(0, 3, 0))
-                    end
-
-                    Hum:MoveTo(Node.Position)
-                    while MacroData.IsPlaying and Root and Hum and Hum.Health > 0 do
-                        if (Root.Position - Node.Position).Magnitude <= 2.5 then break end
-                        Hum:MoveTo(Node.Position)
-                        task.wait(0.05)
-                    end
-                end
-                task.wait(WaitTime)
-
-            elseif Node.Type == "Click" then
-                local cx = Node.X
-                local cy = Node.Y
-                
-                if Node.Y < 40 then 
-                    cx = cx + MacroData.OffsetX
-                    cy = cy + 22 
-                else
-                    cx = cx + MacroData.OffsetX
-                    cy = cy + MacroData.OffsetY
-                end
-                
-                local viewSize = Camera.ViewportSize
-                local minSafe = 15
-                
-                if cx < minSafe then cx = minSafe end
-                if cy < minSafe then cy = minSafe end
-                if cx > (viewSize.X - minSafe) then cx = viewSize.X - minSafe end
-                if cy > (viewSize.Y - minSafe) then cy = viewSize.Y - minSafe end
-                
-                -- [[ ⚡ ปรับแต่งความเสถียรในการคลิกเพื่อแก้บั๊กยูนิตออกเบิ้ล ]]
-                pcall(function()
-                    VirtualInputManager:SendMouseMoveEvent(cx, cy, game)
-                    task.wait(0.03) -- ⚡ เพิ่มเวลาเลื่อนเมาส์ก่อนกด
-                    
-                    VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
-                    task.wait(0.06) -- ⚡ เพิ่มดีเลย์ตอนกดแช่นิ้วลง เพื่อให้เกมรับรู้การกดแบบสมบูรณ์ชัวร์ๆ
-                    VirtualInputManager:SendMouseMoveEvent(cx + 1, cy, game)
-                    task.wait(0.03)
-                    VirtualInputManager:SendMouseButtonEvent(cx + 1, cy, 0, false, game, 1) -- ยกนิ้วขึ้น
-                end)
-                
-                -- ⚡ บังคับหน่วงเวลาหลังคลิกเสร็จเสร็จสิ้น 0.15 วินาที เพื่อล้างประวัติคำสั่งไม่ให้เบิ้ลจังหวะถัดไป
-                task.wait(0.15)
-                task.wait(math.max(0.01, WaitTime - 0.27))
-
-            elseif Node.Type == "KeyPress" then
-                local ok, keyCode = pcall(function()
-                    return Node.Key == "Space" and Enum.KeyCode.Space or Enum.KeyCode[Node.Key]
-                end)
-                if ok and keyCode then
-                    local inputState = Node.State and Enum.UserInputState.Begin or Enum.UserInputState.End
-                    VirtualInputManager:SendKeyEvent(inputState, keyCode, false, game)
-                end
-                task.wait(WaitTime)
-                
-            elseif Node.Type == "EndTime" then
-                task.wait(WaitTime)
-            end
-
-            MacroData.CurrentIndex = MacroData.CurrentIndex + 1
-            run_check = run_check + 1
-            if run_check % 5 == 0 then task.wait(0.01) end
-        end
-    end)
-end
-
--- ====================================================================
--- [[ Auto-Resume Engine ]]
--- ====================================================================
-local function AutoLoadAndResumeEngine()
-    pcall(function()
-        local allFiles = listfiles("")
-        for _, fullPath in ipairs(allFiles) do
-            if string.find(fullPath, FILE_PREFIX) and not string.find(fullPath, "SystemState.json") then
-                local filename = string.sub(fullPath, #FILE_PREFIX + 1, #fullPath - 5)
-                local rawTimeline = HttpService:JSONDecode(readfile(fullPath))
-                if rawTimeline then MacroData.Profiles[filename] = ParseLoadedData(rawTimeline) end
-            end
-        end
-        UpdateStorageUI()
-
-        if isfile(STATE_FILE) then
-            local stateData = HttpService:JSONDecode(readfile(STATE_FILE))
-            if stateData and stateData.LastActiveProfile and stateData.LastActiveProfile ~= "" then
-                if MacroData.Profiles[stateData.LastActiveProfile] then
-                    MacroData.ActiveProfileName = stateData.LastActiveProfile
-                    TitlePlay.Text = "CURRENT: " .. string.upper(stateData.LastActiveProfile)
-                    UpdateDurationLabel(stateData.LastActiveProfile)
-                    UpdateStorageUI()
-                    
-                    if stateData.IsActiveBeforeLeave then
-                        MacroData.IsPlaying = true
-                        SetControlsEnabled(false)
-                        StartPlaybackEngine()
-                    end
-                end
-            end
-        end
-    end)
-end
-
-AutoLoadAndResumeEngine()
-
-for _, minimizeFunc in ipairs(AutoMinimizeRegistry) do
-    pcall(minimizeFunc)
-end
-
--- ====================================================================
--- [[ ปุ่มควบคุมต่างๆ ]]
--- ====================================================================
-BtnCreate.MouseButton1Click:Connect(function()
-    local name = ProfileInput.Text:gsub("%s+", "")
-    if name == "" or MacroData.Profiles[name] then return end
-    MacroData.Profiles[name] = {}
-    HardSaveToFile(name, {})
-    ProfileInput.Text = ""
-    UpdateStorageUI()
-end)
-
-BtnRecord.MouseButton1Click:Connect(function()
-    if MacroData.ActiveProfileName == "" or MacroData.IsPlaying then return end
-    if not MacroData.IsRecording then
-        MacroData.Profiles[MacroData.ActiveProfileName] = {}
-        MacroData.IsRecording = true
-        MacroData.StartTime = tick()
-        lastP = nil
-        lastCamCF = nil
-        BtnRecord.Text = "⏹ STOP REC"
-        BtnRecord.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    else
-        MacroData.IsRecording = false
-        BtnRecord.Text = "⏺ RECORD"
-        BtnRecord.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+-- [[ ระบบคำนวณขั้นบันไดดักหน้าตามเกณฑ์ใหม่ของนาย ]]
+local function GetPredictedPosition()
+    if not GlobalTarget or not GlobalTarget.Parent then return nil end
+    
+    local Char = LocalPlayer.Character
+    local MyRoot = Char and Char:FindFirstChild("HumanoidRootPart")
+    local TargetRoot = GlobalTarget.Parent:FindFirstChild("HumanoidRootPart")
+    
+    if MyRoot and TargetRoot then
+        local targetVelocity = TargetRoot.Velocity
+        local distance = (MyRoot.Position - TargetRoot.Position).Magnitude
         
-        table.insert(MacroData.Profiles[MacroData.ActiveProfileName], {
-            Time = tick() - MacroData.StartTime,
-            Type = "EndTime"
-        })
-        
-        HardSaveToFile(MacroData.ActiveProfileName, MacroData.Profiles[MacroData.ActiveProfileName])
-        UpdateDurationLabel(MacroData.ActiveProfileName)
-        UpdateStorageUI()
-        SaveCurrentSystemState(false)
-    end
-end)
-
-BtnPlay.MouseButton1Click:Connect(function()
-    if MacroData.ActiveProfileName == "" or MacroData.IsRecording then return end
-    local activeProfile = MacroData.Profiles[MacroData.ActiveProfileName]
-    if not activeProfile or #activeProfile == 0 then return end
-
-    if not MacroData.IsPlaying then
-        MacroData.IsPlaying = true
-        SaveCurrentSystemState(true)
-        SetControlsEnabled(false)
-        StartPlaybackEngine()
-    else
-        StopPlayback()
-    end
-end)
-
--- ====================================================================
--- [[ ระบบตรวจจับหน้าจอมือถือดั้งเดิม (TouchStarted) ของ V17.1 ]]
--- ====================================================================
-UserInputService.TouchStarted:Connect(function(touch, processed)
-    if not MacroData.IsRecording or MacroData.ActiveProfileName == "" then return end
-    
-    local objs = LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(touch.Position.X, touch.Position.Y)
-    for _, obj in ipairs(objs) do
-        if obj:IsDescendantOf(PlayFrame) or obj:IsDescendantOf(CreateFrame) or obj:IsDescendantOf(StorageFrame) or obj:IsDescendantOf(RenamePopup) then return end
-    end
-    
-    local currentTime = tick()
-    if (currentTime - lastClickTime) > 0.05 then
-        lastClickTime = currentTime
-        table.insert(MacroData.Profiles[MacroData.ActiveProfileName], {
-            Time = currentTime - MacroData.StartTime,
-            Type = "Click",
-            X = touch.Position.X,
-            Y = touch.Position.Y
-        })
-    end
-end)
-
-local function HandleKeyEvent(input, isBegan)
-    if not MacroData.IsRecording or MacroData.ActiveProfileName == "" then return end
-    
-    local keyName = input.KeyCode.Name
-    if input.KeyCode == Enum.KeyCode.Space then keyName = "Space" end
-    
-    for _, k in ipairs(RECORD_KEYS) do
-        if keyName == k then
-            table.insert(MacroData.Profiles[MacroData.ActiveProfileName], {
-                Time = tick() - MacroData.StartTime,
-                Type = "KeyPress",
-                Key  = keyName,
-                State = isBegan
-            })
-            break
+        -- ปรับเวลาวินาทีการดักหน้าใหม่ตามสั่งเป๊ะๆ
+        local predictionTime = 0
+        if distance < 100 then
+            predictionTime = 0     -- ต่ำกว่า 100 Studs ไม่ต้องดักหน้าเลย (ล็อกตรงๆ)
+        elseif distance >= 100 and distance <= 200 then
+            predictionTime = 0.3   -- ตั้งแต่ 100 ถึง 200 Studs ดักหน้า 0.3 วิ
+        elseif distance > 200 then
+            predictionTime = 0.6   -- สูงกว่า 200 Studs ขึ้นไป ดักหน้า 0.6 วิ
         end
+        
+        local predictedPos = GlobalTarget.Position + (targetVelocity * predictionTime)
+        return predictedPos
     end
+    
+    return GlobalTarget.Position
 end
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if input.UserInputType == Enum.UserInputType.Keyboard then HandleKeyEvent(input, true) end
+-- [[ 5. METATABLE ENGINE (ระบบดักพิกัดเมาส์ระดับเอนจิ้น - เชื่อมต่อพิกัดดักหน้าสมบูรณ์) ]]
+local mt = getrawmetatable(game)
+local oldIndex = mt.__index
+local oldNamecall = mt.__namecall
+setreadonly(mt, false)
+
+mt.__index = newcclosure(function(self, index)
+    if SETTINGS.LOCK_ENABLED and self == Mouse and (index == "Hit" or index == "TargetPoint") then
+        if GlobalTarget then
+            local predPos = GetPredictedPosition()
+            if predPos then
+                return (index == "Hit" and CFrame.new(predPos) or predPos)
+            end
+        end
+    end
+    return oldIndex(self, index)
 end)
 
-UserInputService.InputEnded:Connect(function(input, gameProcessed)
-    if input.UserInputType == Enum.UserInputType.Keyboard then HandleKeyEvent(input, false) end
+mt.__namecall = newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    if SETTINGS.LOCK_ENABLED and not checkcaller() then
+        if self == UserInputService and (method == "GetMouseLocation" or method == "GetMousePosition") then
+            if GlobalTarget then
+                local predPos = GetPredictedPosition()
+                if predPos then
+                    local ScreenPos, _ = Camera:WorldToViewportPoint(predPos)
+                    return Vector2.new(ScreenPos.X, ScreenPos.Y)
+                end
+            end
+        end
+    end
+    return oldNamecall(self, ...)
 end)
 
-RunService.Heartbeat:Connect(function()
-    if not MacroData.IsRecording or MacroData.ActiveProfileName == "" then return end
-    local TimeStamp = tick() - MacroData.StartTime
-    local Root, Hum = GetCharacterElements()
+setreadonly(mt, true)
 
-    local currentCamCF = Camera.CFrame
-    local camMoved = not lastCamCF
-        or (currentCamCF.Position - lastCamCF.Position).Magnitude > 0.1
-        or math.acos(math.clamp(currentCamCF.LookVector:Dot(lastCamCF.LookVector), -1, 1)) > math.rad(1)
+-- [[ 6. Loop อัปเดตตำแหน่งวงเล็ง FOV + ไฮไลท์ ESP ]]
+RunService.RenderStepped:Connect(function()
+    Camera = workspace.CurrentCamera
 
-    if camMoved then
-        table.insert(MacroData.Profiles[MacroData.ActiveProfileName], {
-            Time = TimeStamp, Type = "CamTrack", CFrameValue = currentCamCF
-        })
-        lastCamCF = currentCamCF
+    if MobileFOVCircle then
+        MobileFOVCircle.Position = UDim2.new(0.5, 0, 0.5, SETTINGS.CENTER_Y)
+        MobileFOVCircle.Size = UDim2.new(0, SETTINGS.FOV_RADIUS * 2, 0, SETTINGS.FOV_RADIUS * 2)
+        MobileFOVCircle.Visible = true 
     end
 
-    if Root and Hum and Hum.Health > 0 then
-        if not lastP or (Root.Position - lastP).Magnitude > 2.5 then
-            table.insert(MacroData.Profiles[MacroData.ActiveProfileName], {
-                Time = TimeStamp, Type = "Walk", Position = Root.Position
-            })
-            lastP = Root.Position
+    CheckHighlight()
+
+    if GlobalTarget and GlobalTarget.Parent then
+        local _, OnScreen = Camera:WorldToViewportPoint(GlobalTarget.Position)
+        if OnScreen then
+            if TargetHighlight.Parent ~= GlobalTarget.Parent then
+                TargetHighlight.Parent = GlobalTarget.Parent
+            end
+            TargetHighlight.Enabled = true
+        else
+            TargetHighlight.Enabled = false 
         end
+    else
+        TargetHighlight.Enabled = false
+    end
+end)
+
+-- [[ 7. ระบบควบคุมปุ่มกด UI ]]
+Toggle.MouseButton1Click:Connect(function()
+    if dragging then return end
+    SETTINGS.LOCK_ENABLED = not SETTINGS.LOCK_ENABLED
+    GlobalTarget = nil
+    
+    if SETTINGS.LOCK_ENABLED then
+        Toggle.Text = "HYBRID AIM: ON"
+        Toggle.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+    else
+        Toggle.Text = "HYBRID AIM: OFF"
+        Toggle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        if TargetHighlight then
+            TargetHighlight.Enabled = false
+            TargetHighlight.Parent = nil
+        end
+    end
+end)
+
+ModeBtn.MouseButton1Click:Connect(function()
+    if dragging then return end
+    GlobalTarget = nil 
+    if SETTINGS.TARGET_MODE == "Monster" then
+        SETTINGS.TARGET_MODE = "Player"
+        ModeBtn.Text = "MODE: PLAYER"
+        ModeBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+    else
+        SETTINGS.TARGET_MODE = "Monster"
+        ModeBtn.Text = "MODE: MONSTER"
+        ModeBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 80)
+    end
+    if TargetHighlight then
+        TargetHighlight.Enabled = false
+        TargetHighlight.Parent = nil
     end
 end)
