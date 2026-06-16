@@ -1,4 +1,4 @@
--- [[ HYBRID STRICT LOCK V7.6 - FULL COMPLETE EDITION ]]
+-- [[ HYBRID STRICT LOCK V7.6 - FULL COMPLETE EDITION (UPDATED PREDICTION) ]]
 local SETTINGS = {
     CENTER_Y = -70,           -- [ปรับแต่ง]: ขยับจุดแดงและวงเล็งให้สูงขึ้น (แกน Y -70)
     FOV_RADIUS = 120,         -- [ปรับแต่ง]: วง FOV เล็กลง บีบระยะเล็งให้แคบและแม่นยำขึ้น
@@ -191,11 +191,11 @@ local function GetPredictedPosition()
         -- ปรับเวลาวินาทีการดักหน้าใหม่ตามสั่งเป๊ะๆ
         local predictionTime = 0
         if distance < 100 then
-            predictionTime = 0     -- ต่ำกว่า 100 Studs ไม่ต้องดักหน้าเลย (ล็อกตรงๆ)
+            predictionTime = 0.2   -- แก้ไขจุดนี้จุดเดียว: ต่ำกว่า 100 Studs เปลี่ยนเป็นดักหน้า 0.2 วิแล้วครับ
         elseif distance >= 100 and distance <= 200 then
-            predictionTime = 0.3   -- ตั้งแต่ 100 ถึง 200 Studs ดักหน้า 0.3 วิ
+            predictionTime = 0.3   -- โครงสร้างเดิมคงไว้: 0.3 วิ
         elseif distance > 200 then
-            predictionTime = 0.6   -- สูงกว่า 200 Studs ขึ้นไป ดักหน้า 0.6 วิ
+            predictionTime = 0.6   -- โครงสร้างเดิมคงไว้: 0.6 วิ
         end
         
         local predictedPos = GlobalTarget.Position + (targetVelocity * predictionTime)
